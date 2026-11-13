@@ -1,0 +1,56 @@
+# Kafka (single node, KRaft mode - no ZooKeeper) + Kafka UI
+# Start:    docker compose up -d
+# Stop:     docker compose down
+# Wipe data: docker compose down -v
+#
+# Kafka for clients (Go CLIs, your host machine): localhost:9092
+# Kafka UI dashboard:                            http://localhost:8080
+
+services:
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # --- KRaft node identity: this node is both broker AND controller ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+
+      # --- Listeners: where Kafka accepts connections ---
+      # PLAINTEXT  -> for clients on your host machine (Go CLIs), port 9092
+      # INTERNAL   -> for clients inside the Docker network (Kafka UI), port 29092
+      # CONTROLLER -> for KRaft metadata traffic between controller & broker
+      KAFKA_LISTENERS: PLAINTEXT://:9092,INTERNAL://:29092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # --- Single-node replicas (a 3-broker prod cluster would use 3) ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # No artificial delay before the first rebalance - faster demos
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      # Uses the INTERNAL listener because the UI runs inside the Docker network
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy

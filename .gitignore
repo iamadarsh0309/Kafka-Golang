@@ -1,0 +1,14 @@
+# Ignore Go build output
+*.exe
+*.test
+*.out
+bin/
+dist/
+
+# Environment / secrets
+.env
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
